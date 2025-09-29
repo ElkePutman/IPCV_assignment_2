@@ -1,0 +1,27 @@
+# Python cache en virtualenvs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+.venv/
+env/
+venv/
+
+# Conda environment
+*.yml
+
+# Video bestanden
+*.mp4
+*.avi
+*.mov
+
+# Afbeeldingen
+*.png
+*.jpg
+
+# zip files
+*.zip
+
+# Output directory
+Processed_videos/
