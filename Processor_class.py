@@ -23,6 +23,8 @@ class VideoProcessor:
         self.write_frame = True
         self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.end_time_vid = ((self.frame_count - 1) / self.fps) * 1000
+        self.CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
+        
 
         print('Processing new video')
 
@@ -59,40 +61,81 @@ class VideoProcessor:
     #         # self.frame = cv2.cvtColor(self.frame, cv2.COLOR_GRAY2BGR) #for the text
 
 
-    def temp_match(self,start_time,duration):
+    def temp_match(self,start_time,duration,**kwargs):
         end_time = start_time + duration - 1
         if not start_time <= self.current_time <= end_time:
             return
-        CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
-        TEMP_PATH = os.path.join(CURRENT_PATH,'Templates_4')
+        temp_folder = kwargs.get("templates")
+        TEMP_PATH = os.path.join(self.CURRENT_PATH,temp_folder)
         templates = os.listdir(TEMP_PATH)
         frame_gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
-        # for template in templates:
-        template = templates[0]
-        temp_im = cv2.imread(os.path.join(TEMP_PATH,template),cv2.IMREAD_GRAYSCALE)
-        h,w = temp_im.shape 
-        res = cv2.matchTemplate(frame_gray,temp_im,cv2.TM_CCOEFF_NORMED)
-    # plt.figure()
-    # plt.imshow(res)
-    # plt.axis('off')
-    # plt.show()
-        threshold = 0.75
-        loc = np.where( res >= threshold)
-        for pt in zip(*loc[::-1]):
-            cv2.rectangle(self.frame, pt, (pt[0] + w, pt[1] + h), (0,0,255), 2)
-        # print(f"{template}: {len(loc[0])} matches gevonden")
+        all_loc = []
+        colors = [
+            (255, 0, 0),
+            (0, 255, 0),
+            (0, 0, 255),
+            (255, 255, 0),
+            (255, 0, 255),
+            (0, 255, 255),
+            ]
+        
+        for i, template in enumerate(templates):
+        # template = templates[4]
+            temp_im = cv2.imread(os.path.join(TEMP_PATH,template),cv2.IMREAD_GRAYSCALE)
+            h,w = temp_im.shape                
+            res = cv2.matchTemplate(frame_gray,temp_im,cv2.TM_CCOEFF_NORMED)
+            if kwargs.get("multiple"):            
+                threshold = 0.75            
+                loc = np.where( res >= threshold)
+                all_loc.append(loc)
+            else:
+                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                top_left = max_loc
+                bottom_right = (top_left[0] + w, top_left[1] + h) 
+                cv2.rectangle(self.frame,top_left, bottom_right, 255, 2)
+
+
+        if kwargs.get("multiple"):
+            for i in range(len(templates)):
+                loc = all_loc[i]
+                for pt in zip(*loc[::-1]):
+                    cv2.rectangle(self.frame, pt, (pt[0] + w, pt[1] + h), colors[i], 2)
+
+    
+        
             
-        # cv2.imwrite('res.png',img)
+    # def temp_match_ut(self,start_time,duration):
+    #     end_time = start_time + duration - 1
+    #     if not start_time <= self.current_time <= end_time:
+    #         return
+    #     CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
+    #     TEMP_PATH = os.path.join(CURRENT_PATH,'Templates_UT')
+    #     templates = os.listdir(TEMP_PATH)
+    #     frame_gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)       
+        
+    #     for i, template in enumerate(templates):
+        
+    #         temp_im = cv2.imread(os.path.join(TEMP_PATH,template),cv2.IMREAD_GRAYSCALE)
+    #         h,w = temp_im.shape                
+    #         res = cv2.matchTemplate(frame_gray,temp_im,cv2.TM_CCOEFF_NORMED)            
+    #         threshold = 0.75
+    #         loc = np.where( res >= threshold)
+    #         for pt in zip(*loc[::-1]):
+    #             cv2.rectangle(self.frame, pt, (pt[0] + w, pt[1] + h), (255,0,0), 2)
 
 
    
 
     # run all the funtions
     def run(self, show_video=False):
-        #list of filters (funciton,duration(ms))
+        #list of exercises(fucntion, duration)
         exercises = [
             # (self.show_template, 6000),
-            (self.temp_match, 20000),
+            (self.temp_match, 20000,{"templates":"Templates_5","multiple":True}),
+            (self.temp_match, 5000,{"templates":"Templates_UT"}),
+            (self.temp_match, 5000,{"templates":"Templates_diff"}),
+            (self.temp_match, 5000,{"templates":"Templates_laptop"}),
+            
         ]
 
         while self.cap.isOpened():
@@ -105,8 +148,8 @@ class VideoProcessor:
             start = 0
 
 
-            for func, dur in exercises:
-                result = func(start, dur)
+            for func, dur,kwargs in exercises:
+                result = func(start, dur,**kwargs)
                 start += dur
             
             self.out.write(self.frame)

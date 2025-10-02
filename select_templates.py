@@ -2,37 +2,44 @@ import cv2
 import os
 
 CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
-TEMP_PATH = os.path.join(CURRENT_PATH, 'Templates_4')
+TEMP_PATH = os.path.join(CURRENT_PATH, 'Templates_UT')
 
-# Zorg dat de map bestaat
+
 os.makedirs(TEMP_PATH, exist_ok=True)
 
-# Open video
-cap = cv2.VideoCapture('card_video.mp4') 
+
+cap = cv2.VideoCapture('Best_vid_720_incl_lap.mp4') 
 
 if not cap.isOpened():
     print("Error opening video file")
     exit()
 
-# Lees het eerste frame
+
 ret, frame = cap.read()
 if not ret:
-    print("Kon geen frame lezen uit de video")
+    print("Couldn't read the frame")
     cap.release()
     exit()
 
-# Toon frame
+
 cv2.imshow("Frame", frame)
 
-# Laat gebruiker ROI selecteren
-roi = cv2.selectROI("Select Template", frame, showCrosshair=True, fromCenter=False)
-x, y, w, h = roi
 
-# Sla ROI op als template
-if w > 0 and h > 0:
-    template = frame[y:y+h, x:x+w]
-    cv2.imwrite(os.path.join(TEMP_PATH, "6.png"), template)
-    print("Template saved!")
+# for i in [2,6,4,5,7,8]:
+for i in [1]:
+    scale = 1 
+    big_frame = cv2.resize(frame, None, fx=scale, fy=scale)
+    roi = cv2.selectROI("Select Template", big_frame, showCrosshair=True, fromCenter=False)
+    x, y, w, h = roi
+    x = int(x / scale)
+    y = int(y / scale)
+    w = int(w / scale)
+    h = int(h / scale)
+
+    if w > 0 and h > 0:
+        template = frame[y:y+h, x:x+w]
+        # cv2.imwrite(os.path.join(TEMP_PATH, f"{i}.png"), template)
+        cv2.imwrite(os.path.join(TEMP_PATH, "UT_temp.png"), template)
 
 cv2.destroyAllWindows()
 cap.release()
