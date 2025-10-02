@@ -24,6 +24,11 @@ class VideoProcessor:
         self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.end_time_vid = ((self.frame_count - 1) / self.fps) * 1000
         self.CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
+        self.previous_frame = None
+        self.p0 = None
+        self.old_gray = None
+        self.mask = None
+        self.colors = None
         
 
         print('Processing new video')
@@ -52,13 +57,6 @@ class VideoProcessor:
         if (self.new_width, self.new_height) != (self.width, self.height):
             self.frame = cv2.resize(self.frame, (self.new_width, self.new_height))
 
-    # Make the frames gray
-    # def to_gray(self):        
-    #     if self.frame.shape[2] == 1:
-    #         return
-    #     else:
-    #         self.frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
-    #         # self.frame = cv2.cvtColor(self.frame, cv2.COLOR_GRAY2BGR) #for the text
 
 
     def temp_match(self,start_time,duration,**kwargs):
@@ -101,28 +99,51 @@ class VideoProcessor:
                 for pt in zip(*loc[::-1]):
                     cv2.rectangle(self.frame, pt, (pt[0] + w, pt[1] + h), colors[i], 2)
 
+    def optical_flow(self,start_time,duration):
+        end_time = start_time + duration - 1
+        if not start_time <= self.current_time <= end_time:
+            return
+        # params for ShiTomasi corner detection
+        feature_params = dict( maxCorners = 100,
+                            qualityLevel = 0.3,
+                            minDistance = 7,
+                            blockSize = 7 )
+        # Parameters for lucas kanade optical flow
+        lk_params = dict( winSize  = (15, 15),
+                        maxLevel = 2,
+                        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+        # Create some random colors
+        color = np.random.randint(0, 255, (100, 3))
+        # Take first frame and find corners in it        
+        
+        
+        if self.p0 is None:
+            self.old_gray = cv2.cvtColor(self.previous_frame, cv2.COLOR_BGR2GRAY)
+            self.p0 = cv2.goodFeaturesToTrack(self.old_gray, mask = None, **feature_params)
+            self.mask = np.zeros_like(self.previous_frame)
+            self.colors = np.random.randint(0, 255, (100, 3))
+        # Create a mask image for drawing purposes        
+        frame_gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+        p1, st, err = cv2.calcOpticalFlowPyrLK(self.old_gray, frame_gray, self.p0, None, **lk_params)
+
+        if p1 is not None:
+            good_new = p1[st==1]
+            good_old = self.p0[st==1]
+
+            # draw the tracks
+        for i, (new, old) in enumerate(zip(good_new, good_old)):
+            a, b = new.ravel()
+            c, d = old.ravel()
+            self.mask = cv2.line(self.mask, (int(a), int(b)), (int(c), int(d)), self.colors[i].tolist(), 2)
+            self.frame = cv2.circle(self.frame, (int(a), int(b)), 5, self.colors[i].tolist(), -1)
+        self.frame = cv2.add(self.frame, self.mask) 
+        self.old_gray = frame_gray.copy()      
+        self.p0 = good_new.reshape(-1, 1, 2)
+        
+
     
         
             
-    # def temp_match_ut(self,start_time,duration):
-    #     end_time = start_time + duration - 1
-    #     if not start_time <= self.current_time <= end_time:
-    #         return
-    #     CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
-    #     TEMP_PATH = os.path.join(CURRENT_PATH,'Templates_UT')
-    #     templates = os.listdir(TEMP_PATH)
-    #     frame_gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)       
-        
-    #     for i, template in enumerate(templates):
-        
-    #         temp_im = cv2.imread(os.path.join(TEMP_PATH,template),cv2.IMREAD_GRAYSCALE)
-    #         h,w = temp_im.shape                
-    #         res = cv2.matchTemplate(frame_gray,temp_im,cv2.TM_CCOEFF_NORMED)            
-    #         threshold = 0.75
-    #         loc = np.where( res >= threshold)
-    #         for pt in zip(*loc[::-1]):
-    #             cv2.rectangle(self.frame, pt, (pt[0] + w, pt[1] + h), (255,0,0), 2)
-
 
    
 
@@ -135,6 +156,7 @@ class VideoProcessor:
             (self.temp_match, 5000,{"templates":"Templates_UT"}),
             (self.temp_match, 5000,{"templates":"Templates_diff"}),
             (self.temp_match, 5000,{"templates":"Templates_laptop"}),
+            (self.optical_flow,5000,{}),
             
         ]
 
@@ -151,8 +173,10 @@ class VideoProcessor:
             for func, dur,kwargs in exercises:
                 result = func(start, dur,**kwargs)
                 start += dur
+                
             
             self.out.write(self.frame)
+            self.previous_frame = self.frame
 
 
 
