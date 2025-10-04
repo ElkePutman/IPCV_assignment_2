@@ -24,6 +24,7 @@ class VideoProcessor:
         self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.end_time_vid = ((self.frame_count - 1) / self.fps) * 1000
         self.CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
+        
         self.previous_frame = None
         self.p0 = None
         self.old_gray = None
@@ -32,6 +33,18 @@ class VideoProcessor:
         
 
         print('Processing new video')
+
+    def __call__(self, show_video=False, debug_timestamp=None, save_debug_frame=False):
+        """
+        Maakt de VideoProcessor instantie callable.
+        Als 'debug_timestamp' wordt opgegeven, wordt één frame verwerkt.
+         """
+        if debug_timestamp is not None:
+            self.debug_single_frame(timestamp_ms=debug_timestamp, 
+                                    show_video=show_video, 
+                                    save_frame=save_debug_frame)
+        else:
+            self.run(show_video=show_video)
 
 
     def put_text(self,text, x=50, y=50, color=(255, 0, 0),sz_in = 0.7,inp=None,th_in = 2):
@@ -99,12 +112,30 @@ class VideoProcessor:
                 for pt in zip(*loc[::-1]):
                     cv2.rectangle(self.frame, pt, (pt[0] + w, pt[1] + h), colors[i], 2)
 
+    # def KeyPoints_target(self,**kwargs):
+    #     temp_folder = kwargs.get("templates")        
+    #     TEMP_PATH = os.path.join(self.CURRENT_PATH,temp_folder)
+    #     templates = os.listdir(TEMP_PATH)
+    #     im = cv2.imread(os.path.join(self.TEMP_PATH,templates[0]),cv2.IMREAD_GRAYSCALE)
+    #     sift = cv2.SIFT_create()
+    #     keypoints_1, descriptors_1 = sift.detectAndCompute(im, None)
+    #     roi_keypoint_image=cv2.drawKeypoints(im,keypoints_1,None)
+    #     return
+
+    # def SIFT(self,start_time,duration):
+    #     end_time = start_time + duration - 1
+    #     if not start_time <= self.current_time <= end_time:
+    #         return
+    #     gray_frame= cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
+
+    #     return
+
     def optical_flow(self,start_time,duration):
         end_time = start_time + duration - 1
         if not start_time <= self.current_time <= end_time:
             return
         # params for ShiTomasi corner detection
-        feature_params = dict( maxCorners = 100,
+        feature_params = dict( maxCorners = 50,
                             qualityLevel = 0.3,
                             minDistance = 7,
                             blockSize = 7 )
@@ -197,24 +228,27 @@ class VideoProcessor:
             return
         
         self.current_time = int(self.cap.get(cv2.CAP_PROP_POS_MSEC))
-        print(f"Debug frame on {self.current_time} ms")
-
-        self.downsample()
+        print(f"Debug frame on {self.current_time} ms")     
         
 
     
         exercises = [
             # (self.show_template, 6000),
-            (self.temp_match, 20000),
+            (self.temp_match, 20000,{"templates":"Templates_5","multiple":True}),
+            (self.temp_match, 5000,{"templates":"Templates_UT"}),
+            (self.temp_match, 5000,{"templates":"Templates_diff"}),
+            (self.temp_match, 5000,{"templates":"Templates_laptop"}),
+            (self.optical_flow,5000,{}),
         ]
 
         start = 0
 
-        for func, dur in exercises:
-            result = func(start, dur)
+        for func, dur,kwargs in exercises:
+            result = func(start, dur,**kwargs)
             start += dur
         
         self.out.write(self.frame)
+        self.previous_frame = self.frame
 
 
 
