@@ -96,7 +96,7 @@ class VideoProcessor:
             h,w = temp_im.shape                
             res = cv2.matchTemplate(frame_gray,temp_im,cv2.TM_CCOEFF_NORMED)
             if kwargs.get("multiple"):            
-                threshold = 0.75            
+                threshold = 0.87           
                 loc = np.where( res >= threshold)
                 all_loc.append(loc)
             else:
@@ -111,6 +111,8 @@ class VideoProcessor:
                 loc = all_loc[i]
                 for pt in zip(*loc[::-1]):
                     cv2.rectangle(self.frame, pt, (pt[0] + w, pt[1] + h), colors[i], 2)
+
+        self.put_text(kwargs.get("text"))
 
     # def KeyPoints_target(self,**kwargs):
     #     temp_folder = kwargs.get("templates")        
@@ -130,21 +132,18 @@ class VideoProcessor:
 
     #     return
 
-    def optical_flow(self,start_time,duration):
+    def optical_flow(self,start_time,duration,**kwargs):
         end_time = start_time + duration - 1
         if not start_time <= self.current_time <= end_time:
             return
         # params for ShiTomasi corner detection
-        feature_params = dict( maxCorners = 50,
-                            qualityLevel = 0.3,
-                            minDistance = 7,
-                            blockSize = 7 )
+        feature_params = dict( maxCorners = 30,
+                            qualityLevel = 0.5,
+                            minDistance = 7)
         # Parameters for lucas kanade optical flow
         lk_params = dict( winSize  = (15, 15),
                         maxLevel = 2,
                         criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-        # Create some random colors
-        color = np.random.randint(0, 255, (100, 3))
         # Take first frame and find corners in it        
         
         
@@ -170,6 +169,37 @@ class VideoProcessor:
         self.frame = cv2.add(self.frame, self.mask) 
         self.old_gray = frame_gray.copy()      
         self.p0 = good_new.reshape(-1, 1, 2)
+
+        self.put_text(kwargs.get("text"))
+
+ 
+
+    # def optical_flow_FB(self,start_time,duration):
+    #     end_time = start_time + duration - 1
+    #     if not start_time <= self.current_time <= end_time:
+    #         return
+    #     prev_gray = cv2.cvtColor(self.previous_frame, cv2.COLOR_BGR2GRAY)
+    #     curr_gray = cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
+
+    #     #shi-Tomasi corner detection
+    #     if self.corners is not None:
+    #         self.corners= cv2.goodFeaturesToTrack(prev_gray,30,0.01,10) #gives coordinates x,y
+
+
+    #     flow = cv2.calcOpticalFlowFarneback(prev_gray,curr_gray,None, 0.5, 3, 15, 3, 5, 1.2, 0) #is array in y,x
+
+    #     for pt in corners:
+    #         x,y = pt.ravel()
+    #         dx, dy = flow[int(y),int(x)]
+    #         print(dx)
+    #         scale = 20
+    #         cv2.arrowedLine(self.frame, (int(x), int(y)), (int(x + dx*scale), int(y + dy*scale)), (0, 0, 255), 2,tipLength = 0.5)
+            
+
+
+        
+
+    #     return
         
 
     
@@ -183,11 +213,11 @@ class VideoProcessor:
         #list of exercises(fucntion, duration)
         exercises = [
             # (self.show_template, 6000),
-            (self.temp_match, 20000,{"templates":"Templates_5","multiple":True}),
-            (self.temp_match, 5000,{"templates":"Templates_UT"}),
-            (self.temp_match, 5000,{"templates":"Templates_diff"}),
-            (self.temp_match, 5000,{"templates":"Templates_laptop"}),
-            (self.optical_flow,5000,{}),
+            (self.temp_match, 20000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers"}),
+            (self.temp_match, 5000,{"templates":"UT_temp","text":"Template matching of student UT logo"}),
+            (self.temp_match, 5000,{"templates":"photo_temp","text":"Template matching of photo"}),
+            (self.temp_match, 5000,{"templates":"laptop_temp","text":"Template matching of laptop"}),
+            (self.optical_flow,5000,{"text":"Optical flow"}),
             
         ]
 
@@ -195,6 +225,7 @@ class VideoProcessor:
             ret, self.frame = self.cap.read()
             if not ret:
                 break
+            self.previous_frame = self.frame.copy()
             self.current_time = int(self.cap.get(cv2.CAP_PROP_POS_MSEC))
             self.downsample()
 
@@ -207,7 +238,7 @@ class VideoProcessor:
                 
             
             self.out.write(self.frame)
-            self.previous_frame = self.frame
+            
 
 
 
@@ -228,7 +259,9 @@ class VideoProcessor:
             return
         
         self.current_time = int(self.cap.get(cv2.CAP_PROP_POS_MSEC))
-        print(f"Debug frame on {self.current_time} ms")     
+        print(f"Debug frame on {self.current_time} ms")  
+
+        
         
 
     
@@ -238,7 +271,7 @@ class VideoProcessor:
             (self.temp_match, 5000,{"templates":"Templates_UT"}),
             (self.temp_match, 5000,{"templates":"Templates_diff"}),
             (self.temp_match, 5000,{"templates":"Templates_laptop"}),
-            (self.optical_flow,5000,{}),
+            (self.optical_flow_FB,5000,{}),
         ]
 
         start = 0
@@ -248,7 +281,7 @@ class VideoProcessor:
             start += dur
         
         self.out.write(self.frame)
-        self.previous_frame = self.frame
+        
 
 
 

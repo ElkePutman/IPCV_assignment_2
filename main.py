@@ -25,6 +25,7 @@ if __name__ == '__main__':
     
 
     process = VideoProcessor(input_file, output_file,down_fact=1)
+    process(show_video=False)
 
     # process.run(show_video=False)
-    process.debug_single_frame(5000, show_video=False,save_frame=True)
+    # process.debug_single_frame(5000, show_video=False,save_frame=True)

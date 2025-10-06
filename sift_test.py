@@ -1,97 +1,138 @@
+# %%
 # test orb keypoints
 # Import necessary libraries
 import cv2 
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import random
 
+# %%
 CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
-TEMP_PATH = os.path.join(CURRENT_PATH,"Templates_UT")
+TEMP_PATH = os.path.join(CURRENT_PATH,"sift_diver")
 templates = os.listdir(TEMP_PATH)
 
-im_temp = cv2.imread(os.path.join(TEMP_PATH,templates[0]),cv2.IMREAD_GRAYSCALE)
+# im_temp = cv2.imread(os.path.join(TEMP_PATH,templates[0]))
+im_temp = cv2.imread(os.path.join(TEMP_PATH,'dive_bottle.png'))
+# print(im_temp.shape)
+#%%
+# angle = -18  # graden (negatief = rechtsom)
+# (h, w) =im_temp.shape[:2]
+# center = (w // 2, h // 2)
+
+# M = cv2.getRotationMatrix2D(center, angle, 1.0)
+# im_temp = cv2.warpAffine(im_temp, M, (w, h))
+
+# plt.imshow(im_temp)
+# plt.show()
+#%%
+
+# cv2.imwrite(os.path.join(TEMP_PATH, "dive_bottle_rotated.png"), rotated)
+
+
+
+im_temp_gray = cv2.cvtColor(im_temp,cv2.COLOR_BGR2GRAY)
 orb = cv2.ORB_create()
-sift = cv2.SIFT_create()
-kp1, des1 = sift.detectAndCompute(im_temp, None)
+kp1, des1 = orb.detectAndCompute(im_temp_gray, None)
 roi_keypoint_image=cv2.drawKeypoints(im_temp,kp1, None)
 # visualize key points 
-plt.subplot(121)
-plt.imshow(im_temp,cmap="gray")
+# plt.subplot(121)
+# plt.imshow(im_temp,cmap="gray")
 
-plt.subplot(122)
-plt.imshow(roi_keypoint_image,cmap="gray")
-plt.show()
+# plt.subplot(122)
+# plt.imshow(roi_keypoint_image,cmap="gray")
+# plt.show()
 
-bf = cv2.BFMatcher()
-im_frame = cv2.imread('debug_frame.png',cv2.IMREAD_GRAYSCALE)
+# %%
 
-kp2, des2 = sift.detectAndCompute(im_frame, None)
-# des1 = des1.astype('float32')
-# des2 = des2.astype('float32')
+cap = cv2.VideoCapture('diver_slow.mp4')
+
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+input_fps = cap.get(cv2.CAP_PROP_FPS)
+# Define the codec and create VideoWriter object
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+out = cv2.VideoWriter('output_diver.mp4', fourcc, input_fps, (frame_width, frame_height))
+
+if not cap.isOpened():
+    print("Error opening video file")
+    exit()
 
 
-# matches = bf.knnMatch(des1, des2, k=2)
+# cap.set(cv2.CAP_PROP_POS_MSEC, 1000)
+while True:
+    ret, frame = cap.read()
 
-# good = []
-# for m,n in matches:
-#     if m.distance < 0.75*n.distance:
-#         good.append(m)
+    if not ret:
+        print("Couldn't read the frame")
+        cap.release()
+        exit()
 
-matches = bf.knnMatch(des1,des2,k = 2)
+    frame_gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
 
-# Lowe's ratio test
-good = []
-for m,n in matches:
-    if m.distance < 0.75*n.distance:
-        good.append(m) 
 
- 
-# Draw first 10 matches.
-img3 = cv2.drawMatches(im_temp,kp1,im_frame,kp2,good,None,flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
- 
-plt.imshow(img3),plt.show()
-
-MIN_MATCH_COUNT =10
-
-if len(good)>MIN_MATCH_COUNT:
-    src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-    dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
-    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,1.0)
-    matchesMask = mask.ravel().tolist()
-    h,w = im_temp.shape
-    pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-    dst = cv2.perspectiveTransform(pts,M)
-    im_frame = cv2.polylines(im_frame,[np.int32(dst)],True,255,3, cv2.LINE_AA)
-else:
-    print( "Not enough matches are found - {}/{}".format(len(good), MIN_MATCH_COUNT) )
-    matchesMask = None
-
-draw_params = dict(matchColor = (0,255,0), # draw matches in green color
-                singlePointColor = None,
-                matchesMask = matchesMask, # draw only inliers
-                flags = 2)
-img3 = cv2.drawMatches(im_temp,kp1,im_frame,kp2,good,None,**draw_params)
-plt.imshow(img3, 'gray'),plt.show()
-
-import numpy as np
-import cv2
-
-# Neem alleen keypoints die bij inliers horen
-inlier_kp1 = [kp1[m.queryIdx] for i, m in enumerate(good) if matchesMask[i]]
-inlier_kp2 = [kp2[m.trainIdx] for i, m in enumerate(good) if matchesMask[i]]
+    kp2, des2 = orb.detectAndCompute(frame_gray, None)
 
 
 
-# Voor frame (im_frame)
-pts2 = np.array([kp.pt for kp in inlier_kp2], dtype=np.int32)
-x2, y2, w2, h2 = cv2.boundingRect(pts2)
-cv2.rectangle(im_frame, (x2, y2), (x2+w2, y2+h2), (0,0,255), 2)  # rode rechthoek
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck = True) #create object 
+    matches = bf.match(des1,des2)
+
+    sorted_matches = sorted(matches, key=lambda x: x.distance)
+    # good = [m for m in matches if m.distance < 0.75 * matches[0].distance]
+    good = sorted_matches[:50]
+
+    MIN_MATCH_COUNT = 20
+    if len(good)>MIN_MATCH_COUNT:
+        src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+        dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+
+        H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
+        matchesMask = mask.ravel().tolist()
+
+    # else:
+    #     print( "Not enough matches are found - {}/{}".format(len(good), MIN_MATCH_COUNT) )
+    #     matchesMask = None
+        if H is not None:
+            h, w = im_temp_gray.shape
+            pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+            dst = cv2.perspectiveTransform(pts, H)
+
+
+            draw_params = dict(matchColor = (0,255,0), 
+                            singlePointColor = None,
+                            matchesMask = matchesMask, 
+                            flags = 2)
+            img3 = cv2.drawMatches(im_temp,kp1,frame,kp2,good,None,**draw_params)
+            # plt.imshow(img3, 'gray'),plt.show()
+
+            frame_vis = cv2.polylines(frame.copy(), [np.int32(dst)], True, (0, 255, 0), 3, cv2.LINE_AA)
+
+            new_center = np.mean(dst[:, 0, :], axis=0)  # [x, y]
+
+            alpha = 0.9  
+            if 'smooth_center' not in locals():
+                smooth_center = new_center
+            else:
+                smooth_center = alpha * smooth_center + (1 - alpha) * new_center
+
+            x, y = smooth_center  
+            # x, y = np.mean(dst[:,0,0]), np.mean(dst[:,0,1])
+            info_text = f"Air: {150 :.0f} bar"
+            depth = random.uniform(7,8)
+            depth_text = f"Depth: {depth:.1f} m"
+            cv2.putText(frame, info_text, (int(x)-100, int(y)-50), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+            cv2.putText(frame, depth_text, (int(x)-100, int(y)-20), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)  
+    
+
+    out.write(frame)
+
+# Release the capture and writer objects
+cap.release()
+out.release()
+cv2.destroyAllWindows() 
 
 
 
-plt.imshow(im_frame)
-plt.show()
-
-
-
-          
