@@ -32,12 +32,17 @@ class VideoProcessor:
         self.mask = None
         self.colors = None
 
+
+        self.corners = None
+
         self.orb = None
         self.kp1 = None
         self.des1 = None
         self.im_temp_gray = None
         self.bf = None
         self.smooth_center = None
+        self.frame_number = 0
+        self.depth = None
         
 
         print('Processing new video')
@@ -173,6 +178,23 @@ class VideoProcessor:
         self.kp1,self.des1 = self.orb.detectAndCompute(self.im_temp_gray, None)
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck = True)
 
+    def optical_flow_FB(self,start_time,duration,**kwargs):
+        end_time = start_time + duration - 1
+        if not start_time <= self.current_time <= end_time:
+            return
+        prev_gray = cv2.cvtColor(self.previous_frame, cv2.COLOR_BGR2GRAY)
+        curr_gray = cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
+
+        flow = cv2.calcOpticalFlowFarneback(prev_gray,curr_gray,None, 0.5, 3, 15, 3, 5, 1.2, 0) #is array in y,x
+
+        step = 100
+        scale = 5
+        for y in range(0,curr_gray.shape[0],step):
+            for x in range(0,curr_gray.shape[1],step):
+                fx,fy = flow[y,x]
+                cv2.arrowedLine(self.frame, (x, y), (int(x + fx*scale), int(y + fy*scale)), (0, 0, 255), 3, tipLength=0.5)
+        self.put_text(kwargs.get("text"))
+
     def orb_diver(self,start_time,duration,**kwargs):
         end_time = start_time + duration - 1
         if not start_time <= self.current_time <= end_time:
@@ -209,51 +231,26 @@ class VideoProcessor:
 
                 x, y = self.smooth_center  
                 info_text = f"Air: {150 :.0f} bar"
-                depth = random.uniform(7,8)
-                depth_text = f"Depth: {depth:.1f} m"
+
                 cv2.putText(self.frame, info_text, (int(x)-100, int(y)-50), 
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+                
+                if self.frame_number%(3*self.fps) ==0:
+                    self.depth = random.uniform(7,8)
+                depth_text = f"Depth: {self.depth:.1f} m"
                 cv2.putText(self.frame, depth_text, (int(x)-100, int(y)-20), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2) 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
+        self.frame_number+=1
+        self.put_text(kwargs.get("text"))
+
 
 
        
 
  
 
-    # def optical_flow_FB(self,start_time,duration):
-    #     end_time = start_time + duration - 1
-    #     if not start_time <= self.current_time <= end_time:
-    #         return
-    #     prev_gray = cv2.cvtColor(self.previous_frame, cv2.COLOR_BGR2GRAY)
-    #     curr_gray = cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
-
-    #     #shi-Tomasi corner detection
-    #     if self.corners is not None:
-    #         self.corners= cv2.goodFeaturesToTrack(prev_gray,30,0.01,10) #gives coordinates x,y
 
 
-    #     flow = cv2.calcOpticalFlowFarneback(prev_gray,curr_gray,None, 0.5, 3, 15, 3, 5, 1.2, 0) #is array in y,x
-
-    #     for pt in corners:
-    #         x,y = pt.ravel()
-    #         dx, dy = flow[int(y),int(x)]
-    #         print(dx)
-    #         scale = 20
-    #         cv2.arrowedLine(self.frame, (int(x), int(y)), (int(x + dx*scale), int(y + dy*scale)), (0, 0, 255), 2,tipLength = 0.5)
-            
-
-
-        
-
-    #     return
-        
-
-    
-        
-            
-
-   
 
     # run all the funtions
     def run(self, show_video=False):
@@ -264,8 +261,8 @@ class VideoProcessor:
             (self.temp_match, 5000,{"templates":"UT_temp","text":"Template matching of student UT logo"}),
             (self.temp_match, 5000,{"templates":"photo_temp","text":"Template matching of photo"}),
             (self.temp_match, 5000,{"templates":"laptop_temp","text":"Template matching of laptop"}),
-            (self.optical_flow,5000,{"text":"Optical flow"}),
-            (self.orb_diver,20000,{"templates":"sift_diver"})
+            (self.optical_flow_FB,5000,{"text":"Optical flow"}),
+            (self.orb_diver,20000,{"templates":"sift_diver","text": "ORB feature detection"})
             
         ]
 
@@ -273,7 +270,7 @@ class VideoProcessor:
             ret, self.frame = self.cap.read()
             if not ret:
                 break
-            self.previous_frame = self.frame.copy()
+            frame_copy = self.frame.copy()
             self.current_time = int(self.cap.get(cv2.CAP_PROP_POS_MSEC))
             self.downsample()
 
@@ -286,6 +283,7 @@ class VideoProcessor:
                 
             
             self.out.write(self.frame)
+            self.previous_frame = frame_copy
             
 
 
