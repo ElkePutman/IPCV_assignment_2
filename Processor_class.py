@@ -4,6 +4,7 @@ from skimage import morphology
 import matplotlib.pyplot as plt
 import os
 from PIL import Image, ImageOps
+import random
 
 class VideoProcessor:
     def __init__(self, input_file: str, output_file: str, down_fact: float = 1.0):
@@ -30,6 +31,13 @@ class VideoProcessor:
         self.old_gray = None
         self.mask = None
         self.colors = None
+
+        self.orb = None
+        self.kp1 = None
+        self.des1 = None
+        self.im_temp_gray = None
+        self.bf = None
+        self.smooth_center = None
         
 
         print('Processing new video')
@@ -114,30 +122,14 @@ class VideoProcessor:
 
         self.put_text(kwargs.get("text"))
 
-    # def KeyPoints_target(self,**kwargs):
-    #     temp_folder = kwargs.get("templates")        
-    #     TEMP_PATH = os.path.join(self.CURRENT_PATH,temp_folder)
-    #     templates = os.listdir(TEMP_PATH)
-    #     im = cv2.imread(os.path.join(self.TEMP_PATH,templates[0]),cv2.IMREAD_GRAYSCALE)
-    #     sift = cv2.SIFT_create()
-    #     keypoints_1, descriptors_1 = sift.detectAndCompute(im, None)
-    #     roi_keypoint_image=cv2.drawKeypoints(im,keypoints_1,None)
-    #     return
 
-    # def SIFT(self,start_time,duration):
-    #     end_time = start_time + duration - 1
-    #     if not start_time <= self.current_time <= end_time:
-    #         return
-    #     gray_frame= cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
-
-    #     return
 
     def optical_flow(self,start_time,duration,**kwargs):
         end_time = start_time + duration - 1
         if not start_time <= self.current_time <= end_time:
             return
         # params for ShiTomasi corner detection
-        feature_params = dict( maxCorners = 30,
+        feature_params = dict( maxCorners = 10,
                             qualityLevel = 0.5,
                             minDistance = 7)
         # Parameters for lucas kanade optical flow
@@ -171,6 +163,61 @@ class VideoProcessor:
         self.p0 = good_new.reshape(-1, 1, 2)
 
         self.put_text(kwargs.get("text"))
+
+    def detect_kp_temp(self,template_string):        
+        TEMP_PATH = os.path.join(self.CURRENT_PATH, template_string)
+        templates = os.listdir(TEMP_PATH)
+        im_temp = cv2.imread(os.path.join(TEMP_PATH,templates[0]))
+        self.im_temp_gray = cv2.cvtColor(im_temp,cv2.COLOR_BGR2GRAY)
+        self.orb = cv2.ORB_create()
+        self.kp1,self.des1 = self.orb.detectAndCompute(self.im_temp_gray, None)
+        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck = True)
+
+    def orb_diver(self,start_time,duration,**kwargs):
+        end_time = start_time + duration - 1
+        if not start_time <= self.current_time <= end_time:
+            return
+        
+        if self.orb is None:
+            template_string = kwargs.get("templates")
+            self.detect_kp_temp(template_string)
+
+        frame_gray = cv2.cvtColor(self.frame,cv2.COLOR_BGR2GRAY)
+        kp2, des2 = self.orb.detectAndCompute(frame_gray, None)
+        matches = self.bf.match(self.des1,des2)
+        sorted_matches = sorted(matches, key=lambda x: x.distance)
+        good = sorted_matches[:50]
+        MIN_MATCH_COUNT = 20
+        if len(good)>MIN_MATCH_COUNT:
+            src_pts = np.float32([ self.kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+            dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+
+            H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
+            if H is not None:
+        # matchesMask = mask.ravel().tolist()
+                h, w = self.im_temp_gray.shape
+                pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+                dst = cv2.perspectiveTransform(pts, H)
+
+                new_center = np.mean(dst[:, 0, :], axis=0)  
+
+                alpha = 0.9  
+                if self.smooth_center is None:
+                    self.smooth_center = new_center
+                else:
+                    self.smooth_center = alpha * self.smooth_center + (1 - alpha) * new_center
+
+                x, y = self.smooth_center  
+                info_text = f"Air: {150 :.0f} bar"
+                depth = random.uniform(7,8)
+                depth_text = f"Depth: {depth:.1f} m"
+                cv2.putText(self.frame, info_text, (int(x)-100, int(y)-50), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+                cv2.putText(self.frame, depth_text, (int(x)-100, int(y)-20), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2) 
+
+
+       
 
  
 
@@ -218,6 +265,7 @@ class VideoProcessor:
             (self.temp_match, 5000,{"templates":"photo_temp","text":"Template matching of photo"}),
             (self.temp_match, 5000,{"templates":"laptop_temp","text":"Template matching of laptop"}),
             (self.optical_flow,5000,{"text":"Optical flow"}),
+            (self.orb_diver,20000,{"templates":"sift_diver"})
             
         ]
 
@@ -271,7 +319,8 @@ class VideoProcessor:
             (self.temp_match, 5000,{"templates":"Templates_UT"}),
             (self.temp_match, 5000,{"templates":"Templates_diff"}),
             (self.temp_match, 5000,{"templates":"Templates_laptop"}),
-            (self.optical_flow_FB,5000,{}),
+            (self.optical_flow,5000,{}),
+            (self.orb_diver,20000,{"templates":"sift_diver"})
         ]
 
         start = 0
