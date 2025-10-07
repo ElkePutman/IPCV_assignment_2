@@ -71,19 +71,58 @@ class VideoProcessor:
         else:
             cv2.putText(inp, text, (x_pos, y_pos), cv2.FONT_HERSHEY_SIMPLEX, sz, color, th, cv2.LINE_AA)
 
-    # helper function to change what you do based on video seconds
-    def between(self, lower=None, upper=None) -> bool:
-        if lower is not None and upper is not None:
-            return lower <= int(self.cap.get(cv2.CAP_PROP_POS_MSEC)) < upper
-        else:
-            return self.lower <= int(self.cap.get(cv2.CAP_PROP_POS_MSEC)) < self.upper
 
     # downsample the video to a lower resolution
     def downsample(self):
         if (self.new_width, self.new_height) != (self.width, self.height):
             self.frame = cv2.resize(self.frame, (self.new_width, self.new_height))
 
+    def overlay_template_on_frame(self, template_path):        
+        temp_color = cv2.imread(template_path, cv2.IMREAD_COLOR)
+        if temp_color is None:
+            raise FileNotFoundError(f"Template niet gevonden: {template_path}")
 
+        scale = 4
+        temp_color = cv2.resize(temp_color, None, fx=scale, fy=scale)
+        th, tw = temp_color.shape[:2]
+        fh, fw = self.frame.shape[:2]
+
+        margin1 = fw-tw-20
+        margin2 = fh/2
+
+        x,y = int(margin1),int(margin2-th/2)  
+
+        self.frame[y:y+th, x:x+tw] = temp_color
+        return self.frame
+
+    def temp_match_sep(self, start_time,duration,**kwargs):
+        end_time = start_time + duration - 1
+        if not start_time <= self.current_time <= end_time:
+            return
+        temp_folder = kwargs.get("templates")
+        TEMP_PATH = os.path.join(self.CURRENT_PATH,temp_folder)
+        templates = os.listdir(TEMP_PATH)
+        frame_gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+        all_loc = []
+        temp_num = kwargs.get("tempnum")        
+        template = templates[temp_num]
+        temp_im = cv2.imread(os.path.join(TEMP_PATH,template),cv2.IMREAD_GRAYSCALE)
+        h,w = temp_im.shape                
+        res = cv2.matchTemplate(frame_gray,temp_im,cv2.TM_CCOEFF_NORMED)
+        if kwargs.get("multiple"):            
+            threshold = 0.87           
+            loc = np.where( res >= threshold)
+            for pt in zip(*loc[::-1]):
+                cv2.rectangle(self.frame, pt, (pt[0] + w, pt[1] + h), (255,0,0), 2)
+
+        else:
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+            top_left = max_loc
+            bottom_right = (top_left[0] + w, top_left[1] + h) 
+            cv2.rectangle(self.frame,top_left, bottom_right, 255, 2)
+
+        self.put_text(kwargs.get("text"))
+        self.overlay_template_on_frame(template_path= os.path.join(TEMP_PATH,template))
 
     def temp_match(self,start_time,duration,**kwargs):
         end_time = start_time + duration - 1
@@ -104,7 +143,6 @@ class VideoProcessor:
             ]
         
         for i, template in enumerate(templates):
-        # template = templates[4]
             temp_im = cv2.imread(os.path.join(TEMP_PATH,template),cv2.IMREAD_GRAYSCALE)
             h,w = temp_im.shape                
             res = cv2.matchTemplate(frame_gray,temp_im,cv2.TM_CCOEFF_NORMED)
@@ -112,6 +150,8 @@ class VideoProcessor:
                 threshold = 0.87           
                 loc = np.where( res >= threshold)
                 all_loc.append(loc)
+                print(all_loc)
+                print(len(all_loc))
             else:
                 min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
                 top_left = max_loc
@@ -129,45 +169,43 @@ class VideoProcessor:
 
 
 
-    def optical_flow(self,start_time,duration,**kwargs):
-        end_time = start_time + duration - 1
-        if not start_time <= self.current_time <= end_time:
-            return
-        # params for ShiTomasi corner detection
-        feature_params = dict( maxCorners = 10,
-                            qualityLevel = 0.5,
-                            minDistance = 7)
-        # Parameters for lucas kanade optical flow
-        lk_params = dict( winSize  = (15, 15),
-                        maxLevel = 2,
-                        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
-        # Take first frame and find corners in it        
-        
-        
-        if self.p0 is None:
-            self.old_gray = cv2.cvtColor(self.previous_frame, cv2.COLOR_BGR2GRAY)
-            self.p0 = cv2.goodFeaturesToTrack(self.old_gray, mask = None, **feature_params)
-            self.mask = np.zeros_like(self.previous_frame)
-            self.colors = np.random.randint(0, 255, (100, 3))
-        # Create a mask image for drawing purposes        
-        frame_gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
-        p1, st, err = cv2.calcOpticalFlowPyrLK(self.old_gray, frame_gray, self.p0, None, **lk_params)
+    # def optical_flow(self,start_time,duration,**kwargs):
+    #     end_time = start_time + duration - 1
+    #     if not start_time <= self.current_time <= end_time:
+    #         return
+    #     # params for ShiTomasi corner detection
+    #     feature_params = dict( maxCorners = 10,
+    #                         qualityLevel = 0.5,
+    #                         minDistance = 7)
+    #     # Parameters for lucas kanade optical flow
+    #     lk_params = dict( winSize  = (15, 15),
+    #                     maxLevel = 2,
+    #                     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+    #     # Take first frame and find corners in it        
+    #     if self.p0 is None:
+    #         self.old_gray = cv2.cvtColor(self.previous_frame, cv2.COLOR_BGR2GRAY)
+    #         self.p0 = cv2.goodFeaturesToTrack(self.old_gray, mask = None, **feature_params)
+    #         self.mask = np.zeros_like(self.previous_frame)
+    #         self.colors = np.random.randint(0, 255, (100, 3))
+    #     # Create a mask image for drawing purposes        
+    #     frame_gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+    #     p1, st, err = cv2.calcOpticalFlowPyrLK(self.old_gray, frame_gray, self.p0, None, **lk_params)
 
-        if p1 is not None:
-            good_new = p1[st==1]
-            good_old = self.p0[st==1]
+    #     if p1 is not None:
+    #         good_new = p1[st==1]
+    #         good_old = self.p0[st==1]
 
-            # draw the tracks
-        for i, (new, old) in enumerate(zip(good_new, good_old)):
-            a, b = new.ravel()
-            c, d = old.ravel()
-            self.mask = cv2.line(self.mask, (int(a), int(b)), (int(c), int(d)), self.colors[i].tolist(), 2)
-            self.frame = cv2.circle(self.frame, (int(a), int(b)), 5, self.colors[i].tolist(), -1)
-        self.frame = cv2.add(self.frame, self.mask) 
-        self.old_gray = frame_gray.copy()      
-        self.p0 = good_new.reshape(-1, 1, 2)
+    #         # draw the tracks
+    #     for i, (new, old) in enumerate(zip(good_new, good_old)):
+    #         a, b = new.ravel()
+    #         c, d = old.ravel()
+    #         self.mask = cv2.line(self.mask, (int(a), int(b)), (int(c), int(d)), self.colors[i].tolist(), 2)
+    #         self.frame = cv2.circle(self.frame, (int(a), int(b)), 5, self.colors[i].tolist(), -1)
+    #     self.frame = cv2.add(self.frame, self.mask) 
+    #     self.old_gray = frame_gray.copy()      
+    #     self.p0 = good_new.reshape(-1, 1, 2)
 
-        self.put_text(kwargs.get("text"))
+    #     self.put_text(kwargs.get("text"))
 
     def detect_kp_temp(self,template_string):        
         TEMP_PATH = os.path.join(self.CURRENT_PATH, template_string)
@@ -188,11 +226,11 @@ class VideoProcessor:
         flow = cv2.calcOpticalFlowFarneback(prev_gray,curr_gray,None, 0.5, 3, 15, 3, 5, 1.2, 0) #is array in y,x
 
         step = 100
-        scale = 5
+        scale = 3
         for y in range(0,curr_gray.shape[0],step):
             for x in range(0,curr_gray.shape[1],step):
                 fx,fy = flow[y,x]
-                cv2.arrowedLine(self.frame, (x, y), (int(x + fx*scale), int(y + fy*scale)), (0, 0, 255), 3, tipLength=0.5)
+                cv2.arrowedLine(self.frame, (x, y), (int(x + fx*scale), int(y + fy*scale)), (0, 0, 255), 3, tipLength=0.3)
         self.put_text(kwargs.get("text"))
 
     def orb_diver(self,start_time,duration,**kwargs):
@@ -216,7 +254,6 @@ class VideoProcessor:
 
             H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
             if H is not None:
-        # matchesMask = mask.ravel().tolist()
                 h, w = self.im_temp_gray.shape
                 pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
                 dst = cv2.perspectiveTransform(pts, H)
@@ -244,20 +281,17 @@ class VideoProcessor:
         self.put_text(kwargs.get("text"))
 
 
-
-       
-
- 
-
-
-
-
     # run all the funtions
     def run(self, show_video=False):
         #list of exercises(fucntion, duration)
         exercises = [
-            # (self.show_template, 6000),
-            (self.temp_match, 20000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers"}),
+            # (self.temp_match, 20000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers"}),
+            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":0}),
+            (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":1}),
+            (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":2}),
+            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":3}),
+            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":4}),
+            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":5}),
             (self.temp_match, 5000,{"templates":"UT_temp","text":"Template matching of student UT logo"}),
             (self.temp_match, 5000,{"templates":"photo_temp","text":"Template matching of photo"}),
             (self.temp_match, 5000,{"templates":"laptop_temp","text":"Template matching of laptop"}),
@@ -312,13 +346,18 @@ class VideoProcessor:
 
     
         exercises = [
-            # (self.show_template, 6000),
-            (self.temp_match, 20000,{"templates":"Templates_5","multiple":True}),
-            (self.temp_match, 5000,{"templates":"Templates_UT"}),
-            (self.temp_match, 5000,{"templates":"Templates_diff"}),
-            (self.temp_match, 5000,{"templates":"Templates_laptop"}),
-            (self.optical_flow,5000,{}),
-            (self.orb_diver,20000,{"templates":"sift_diver"})
+            # (self.temp_match, 20000,{"templates":"Templates_5","multiple":True}),
+            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":0}),
+            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":1}),
+            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":2}),
+            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":3}),
+            (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":4}),
+            (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":5}),
+            (self.temp_match, 5000,{"templates":"UT_temp","text":"Template matching of student UT logo"}),
+            (self.temp_match, 5000,{"templates":"photo_temp","text":"Template matching of photo"}),
+            (self.temp_match, 5000,{"templates":"laptop_temp","text":"Template matching of laptop"}),
+            (self.optical_flow_FB,5000,{"text":"Optical flow"}),
+            (self.orb_diver,20000,{"templates":"sift_diver","text": "ORB feature detection"})
         ]
 
         start = 0
@@ -327,10 +366,7 @@ class VideoProcessor:
             result = func(start, dur,**kwargs)
             start += dur
         
-        self.out.write(self.frame)
-        
-
-
+        self.out.write(self.frame)    
 
         if show_video:
             cv2.imshow('Debug Frame', self.frame)
