@@ -213,11 +213,11 @@ class VideoProcessor:
         #list of exercises(fucntion, duration)
         exercises = [
             (self.temp_match, 20000,{"templates":"Templates_numbers","multiple":True,"text":"Template matching of student numbers","scale":4}),
-            (self.temp_match, 5000,{"templates":"Templates_logo","text":"Template matching of student UT logo","scale":1}),
+            (self.temp_match, 5000,{"templates":"Templates_logo","text":"Template matching of UT logo","scale":1}),
             (self.temp_match, 5000,{"templates":"Templates_photo","text":"Template matching of photo","scale":0.5}),
             (self.temp_match, 5000,{"templates":"Templates_laptop","text":"Template matching of laptop","scale":0.2}),
-            (self.optical_flow_FB,5000,{"text":"Optical flow"}),
-            (self.orb_diver,20000,{"templates":"sift_diver","text": "ORB feature detection of bottle"})            
+            (self.optical_flow_FB,5000,{"text":"Farneback Optical Flow"}),
+            (self.orb_diver,20000,{"templates":"Templates_diver","text": "ORB feature detection of bottle"})            
         ]
 
         while self.cap.isOpened():
