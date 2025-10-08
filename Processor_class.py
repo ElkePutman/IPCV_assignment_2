@@ -77,20 +77,19 @@ class VideoProcessor:
         if (self.new_width, self.new_height) != (self.width, self.height):
             self.frame = cv2.resize(self.frame, (self.new_width, self.new_height))
 
-    def overlay_template_on_frame(self, template_path):        
+    def overlay_template_on_frame(self, template_path,margin2,scale = 4):        
         temp_color = cv2.imread(template_path, cv2.IMREAD_COLOR)
         if temp_color is None:
             raise FileNotFoundError(f"Template niet gevonden: {template_path}")
 
-        scale = 4
         temp_color = cv2.resize(temp_color, None, fx=scale, fy=scale)
         th, tw = temp_color.shape[:2]
         fh, fw = self.frame.shape[:2]
 
         margin1 = fw-tw-20
-        margin2 = fh/2
+          
 
-        x,y = int(margin1),int(margin2-th/2)  
+        x,y = int(margin1),int(margin2)  
 
         self.frame[y:y+th, x:x+tw] = temp_color
         return self.frame
@@ -142,6 +141,8 @@ class VideoProcessor:
             (0, 255, 255),
             ]
         
+        margin2 = 10                    
+        scale = kwargs.get("scale")
         for i, template in enumerate(templates):
             temp_im = cv2.imread(os.path.join(TEMP_PATH,template),cv2.IMREAD_GRAYSCALE)
             h,w = temp_im.shape                
@@ -150,13 +151,16 @@ class VideoProcessor:
                 threshold = 0.87           
                 loc = np.where( res >= threshold)
                 all_loc.append(loc)
-                print(all_loc)
-                print(len(all_loc))
             else:
                 min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
                 top_left = max_loc
                 bottom_right = (top_left[0] + w, top_left[1] + h) 
-                cv2.rectangle(self.frame,top_left, bottom_right, 255, 2)
+                cv2.rectangle(self.frame,top_left, bottom_right, 255, 2)                   
+
+
+            temp_path = os.path.join(TEMP_PATH,template)
+            self.overlay_template_on_frame(temp_path,margin2,scale)
+            margin2 = margin2 +100+h
 
 
         if kwargs.get("multiple"):
@@ -226,7 +230,7 @@ class VideoProcessor:
         flow = cv2.calcOpticalFlowFarneback(prev_gray,curr_gray,None, 0.5, 3, 15, 3, 5, 1.2, 0) #is array in y,x
 
         step = 100
-        scale = 3
+        scale = 2
         for y in range(0,curr_gray.shape[0],step):
             for x in range(0,curr_gray.shape[1],step):
                 fx,fy = flow[y,x]
@@ -270,13 +274,13 @@ class VideoProcessor:
                 info_text = f"Air: {150 :.0f} bar"
 
                 cv2.putText(self.frame, info_text, (int(x)-100, int(y)-50), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
                 
                 if self.frame_number%(3*self.fps) ==0:
                     self.depth = random.uniform(7,8)
                 depth_text = f"Depth: {self.depth:.1f} m"
                 cv2.putText(self.frame, depth_text, (int(x)-100, int(y)-20), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,255), 2)
         self.frame_number+=1
         self.put_text(kwargs.get("text"))
 
@@ -285,18 +289,18 @@ class VideoProcessor:
     def run(self, show_video=False):
         #list of exercises(fucntion, duration)
         exercises = [
-            # (self.temp_match, 20000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers"}),
-            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":0}),
-            (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":1}),
-            (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":2}),
-            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":3}),
-            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":4}),
-            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":5}),
-            (self.temp_match, 5000,{"templates":"UT_temp","text":"Template matching of student UT logo"}),
-            (self.temp_match, 5000,{"templates":"photo_temp","text":"Template matching of photo"}),
-            (self.temp_match, 5000,{"templates":"laptop_temp","text":"Template matching of laptop"}),
+            (self.temp_match, 20000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","scale":4}),
+            # (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":0}),
+            # (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":1}),
+            # (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":2}),
+            # (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":3}),
+            # (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":4}),
+            # (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":5}),
+            (self.temp_match, 5000,{"templates":"UT_temp","text":"Template matching of student UT logo","scale":1}),
+            (self.temp_match, 5000,{"templates":"photo_temp","text":"Template matching of photo","scale":0.5}),
+            (self.temp_match, 5000,{"templates":"laptop_temp","text":"Template matching of laptop","scale":0.2}),
             (self.optical_flow_FB,5000,{"text":"Optical flow"}),
-            (self.orb_diver,20000,{"templates":"sift_diver","text": "ORB feature detection"})
+            (self.orb_diver,20000,{"templates":"sift_diver","text": "ORB feature detection of bottle"})
             
         ]
 
@@ -318,9 +322,6 @@ class VideoProcessor:
             
             self.out.write(self.frame)
             self.previous_frame = frame_copy
-            
-
-
 
             if show_video:
                 cv2.imshow('Video', self.frame)
@@ -341,21 +342,17 @@ class VideoProcessor:
         self.current_time = int(self.cap.get(cv2.CAP_PROP_POS_MSEC))
         print(f"Debug frame on {self.current_time} ms")  
 
-        
-        
-
-    
         exercises = [
-            # (self.temp_match, 20000,{"templates":"Templates_5","multiple":True}),
-            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":0}),
-            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":1}),
-            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":2}),
-            (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":3}),
-            (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":4}),
-            (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":5}),
-            (self.temp_match, 5000,{"templates":"UT_temp","text":"Template matching of student UT logo"}),
-            (self.temp_match, 5000,{"templates":"photo_temp","text":"Template matching of photo"}),
-            (self.temp_match, 5000,{"templates":"laptop_temp","text":"Template matching of laptop"}),
+            (self.temp_match, 20000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","scale":4}),
+            # (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":0}),
+            # (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":1}),
+            # (self.temp_match_sep, 4000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":2}),
+            # (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":3}),
+            # (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":4}),
+            # (self.temp_match_sep, 3000,{"templates":"Numb_temp","multiple":True,"text":"Template matching of student numbers","tempnum":5}),
+            (self.temp_match, 5000,{"templates":"UT_temp","text":"Template matching of student UT logo","scale":0.5}),
+            (self.temp_match, 5000,{"templates":"photo_temp","text":"Template matching of photo","scale":0.5}),
+            (self.temp_match, 5000,{"templates":"laptop_temp","text":"Template matching of laptop","scale":0.2}),
             (self.optical_flow_FB,5000,{"text":"Optical flow"}),
             (self.orb_diver,20000,{"templates":"sift_diver","text": "ORB feature detection"})
         ]
