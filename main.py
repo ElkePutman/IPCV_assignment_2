@@ -24,7 +24,6 @@ if __name__ == '__main__':
     output_file = os.path.join(BASE_OUTPUT_PATH, args.output)
     
 
-    process = VideoProcessor(input_file, output_file,down_fact=1)
+    process = VideoProcessor(input_file, output_file)
     process(show_video=False)
-    # process(show_video=False,debug_timestamp=34000,save_debug_frame=True)
 
